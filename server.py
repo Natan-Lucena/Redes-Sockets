@@ -1,7 +1,7 @@
 """
 Servidor TCP para cálculo de IMC (BMI Calculator) – versão alinhada ao enunciado.
 - Protocolo: TCP (stream), cliente envia "peso,altura" em texto UTF-8.
-- Servidor processa e responde APENAS "Fat" ou "Thin" (conforme a tabela do trabalho).
+- Servidor processa e responde APENAS "Gordo" ou "Magro" (em português).
 - Suporta múltiplos clientes via threads.
 - Valida entrada e converte altura em cm -> m quando apropriado.
 """
@@ -13,31 +13,27 @@ PORT = 55060
 BACKLOG = 50
 RECV_BUFSIZE = 1024
 
-
+# Função que classifica o BMI em português
 def classifica_bmi(bmi: float) -> str:
-    return "Fat" if bmi >= 25 else "Thin"
+    return "Gordo" if bmi >= 25 else "Magro"
 
 def parse_payload(data: str) -> tuple[float, float]:
-
     try:
         weight_str, height_str = data.split(",", 1)
         weight = float(weight_str.replace(",", ".").strip())
         height = float(height_str.replace(",", ".").strip())
         return weight, height
     except Exception as exc:
-        raise ValueError("payload invalido, esperado 'peso,altura'") from exc
-
+        raise ValueError("payload inválido, esperado 'peso,altura'") from exc
 
 def normaliza_medidas(weight: float, height: float) -> tuple[float, float]:
-
     if height > 10:
         height = height / 100.0
     if weight <= 0 or height <= 0:
         raise ValueError("valores devem ser positivos")   
     if not (0 < weight <= 500 and 0 < height <= 3):
-        raise ValueError("valores fora do intervalo razoavel")
+        raise ValueError("valores fora do intervalo razoável")
     return weight, height
-
 
 def handle_client(conn: socket.socket, addr):
     peer = f"{addr[0]}:{addr[1]}"
@@ -67,7 +63,6 @@ def handle_client(conn: socket.socket, addr):
     finally:
         conn.close()
 
-
 def run_server():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -81,7 +76,6 @@ def run_server():
                 t.start()
         except KeyboardInterrupt:
             print("\nServidor encerrado.")
-
 
 if __name__ == "__main__":
     run_server()

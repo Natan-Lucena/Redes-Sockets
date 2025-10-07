@@ -15,7 +15,18 @@ RECV_BUFSIZE = 1024
 
 # Função que classifica o BMI em português
 def classifica_bmi(bmi: float) -> str:
-    return "Gordo" if bmi >= 25 else "Magro"
+    if bmi < 18.5:
+        return "Abaixo do peso"
+    elif bmi < 25:
+        return "Peso normal"
+    elif bmi < 30:
+        return "Sobrepeso"
+    elif bmi < 35:
+        return "Obesidade grau 1"
+    elif bmi < 40:
+        return "Obesidade grau 2"
+    else:
+        return "Obesidade grau 3"
 
 def parse_payload(data: str) -> tuple[float, float]:
     try:

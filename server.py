@@ -1,60 +1,71 @@
 """
-Servidor TCP para cálculo de IMC (BMI Calculator).
-Recebe peso e altura do cliente e retorna o resultado.
-Melhorias:
-- Reutilização de endereço (SO_REUSEADDR)
-- Timeout de leitura
-- Uso de sendall (garante envio completo)
-- Threads daemon (encerra com o programa)
-- Backlog configurado
+Servidor TCP para cálculo de IMC (BMI Calculator) – versão alinhada ao enunciado.
+- Protocolo: TCP (stream), cliente envia "peso,altura" em texto UTF-8.
+- Servidor processa e responde APENAS "Fat" ou "Thin" (conforme a tabela do trabalho).
+- Suporta múltiplos clientes via threads.
+- Valida entrada e converte altura em cm -> m quando apropriado.
 """
-
 import socket
 import threading
 
 HOST = "0.0.0.0"
-PORT = 8000
-BACKLOG = 20
-RECV_SIZE = 1024
-TIMEOUT = 100
+PORT = 55060  
+BACKLOG = 50
+RECV_BUFSIZE = 1024
+
+
+def classifica_bmi(bmi: float) -> str:
+    return "Fat" if bmi >= 25 else "Thin"
+
+def parse_payload(data: str) -> tuple[float, float]:
+
+    try:
+        weight_str, height_str = data.split(",", 1)
+        weight = float(weight_str.replace(",", ".").strip())
+        height = float(height_str.replace(",", ".").strip())
+        return weight, height
+    except Exception as exc:
+        raise ValueError("payload invalido, esperado 'peso,altura'") from exc
+
+
+def normaliza_medidas(weight: float, height: float) -> tuple[float, float]:
+
+    if height > 10:
+        height = height / 100.0
+    if weight <= 0 or height <= 0:
+        raise ValueError("valores devem ser positivos")   
+    if not (0 < weight <= 500 and 0 < height <= 3):
+        raise ValueError("valores fora do intervalo razoavel")
+    return weight, height
 
 
 def handle_client(conn: socket.socket, addr):
     peer = f"{addr[0]}:{addr[1]}"
-    print(f"Conexão recebida de {peer}")
     try:
-        conn.settimeout(TIMEOUT)
-
-        data = conn.recv(RECV_SIZE)
+        conn.settimeout(15)
+        data = conn.recv(RECV_BUFSIZE)
         if not data:
-            print(f"[{peer}] Nenhum dado recebido.")
             return
-
-        text = data.decode("utf-8").strip()
-        weight, height = map(float, text.split(","))
-        bmi = weight / (height ** 2)
-
-        if bmi < 18.5:
-            result = "Thin"
-        elif bmi < 25:
-            result = "Normal"
-        elif bmi < 30:
-            result = "Overweight"
-        else:
-            result = "Fat"
-
-        message = f"BMI: {bmi:.2f} ({result})"
-        conn.sendall(message.encode("utf-8"))
-
-        print(f"[{peer}] peso={weight} altura={height} => {message}")
-
+        text = data.decode("utf-8", errors="replace").strip()
+        weight, height = parse_payload(text)
+        weight, height = normaliza_medidas(weight, height)
+        bmi = weight / (height * height)
+        result = classifica_bmi(bmi)
+        conn.sendall(result.encode("utf-8"))
+        print(f"[{peer}] peso={weight:.2f}kg altura={height:.2f}m bmi={bmi:.2f} => {result}")
+    except ValueError as ve:
+        msg = f"Erro: {str(ve)}"
+        try:
+            conn.sendall(msg.encode("utf-8"))
+        except Exception:
+            pass
+        print(f"[{peer}] {msg}")
     except socket.timeout:
-        print(f"[{peer}] Timeout de leitura.")
+        print(f"[{peer}] timeout de leitura")
     except Exception as e:
-        print(f"[{peer}] Erro: {e}")
+        print(f"[{peer}] Erro inesperado: {e}")
     finally:
         conn.close()
-        print(f"[{peer}] Conexão encerrada.")
 
 
 def run_server():
@@ -62,14 +73,12 @@ def run_server():
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server.bind((HOST, PORT))
         server.listen(BACKLOG)
-
         print(f"Servidor ouvindo em {HOST}:{PORT}")
-
         try:
             while True:
                 conn, addr = server.accept()
-                thread = threading.Thread(target=handle_client, args=(conn, addr), daemon=True)
-                thread.start()
+                t = threading.Thread(target=handle_client, args=(conn, addr), daemon=True)
+                t.start()
         except KeyboardInterrupt:
             print("\nServidor encerrado.")
 
